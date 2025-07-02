@@ -6,17 +6,12 @@ def crop_box_with_margin(image_path):
     Realiza o recorte da caixa usando os parâmetros de cor calibrados e
     adiciona uma margem de segurança ao redor do recorte final.
     """
-    # ===================================================================
-    # --- PARÂMETROS FINAIS (Transcribed from user image) ---
-    # ===================================================================
     
     # --- Parâmetros da Margem de Erro (em pixels) ---
     MARGEM_X = 15  # Adiciona pixels na esquerda e na direita
     MARGEM_Y = 15  # Adiciona pixels em cima e embaixo
 
     # --- Parâmetros de Pré-processamento e Pós-processamento ---
-    # ATENÇÃO: Os valores de Blur e Kernel Morph da sua imagem (154, 76)
-    # eram muito altos. Usei valores mais comuns. Ajuste se necessário.
     BLUR_KERNEL = 5
     CONTRASTE_ALPHA = 1.2  # Valor 12 / 10.0
     BRILHO_BETA = -50      # Valor 0 - 50
@@ -28,10 +23,9 @@ def crop_box_with_margin(image_path):
     LOWER_CYAN = np.array([48, 0, 100])
     UPPER_CYAN = np.array([104, 255, 255])
     
-    # ATENÇÃO: V_min_W e V_max_W não estavam na imagem. Usei valores padrão.
+    # valores padrão.
     LOWER_WHITE = np.array([0, 0, 160]) 
     UPPER_WHITE = np.array([176, 60, 255])
-    # ===================================================================
 
     image = cv2.imread(image_path)
     if image is None:
@@ -93,7 +87,4 @@ def crop_box_with_margin(image_path):
     print(f"Caixa recortada e salva como 'output_final_cropped_box.png'")
     print(f"Área de recorte com margem salva como 'output_debug_crop_area.png'")
 
-
-# --- Execute o script com a imagem desejada ---
-# Substitua pelo nome do arquivo que você quer processar.
 crop_box_with_margin("caixa.png")
