@@ -1,0 +1,3 @@
+- `colorseg_top.py` quando rodado usa caixa.png para mostrar a seleção que é feita a partir do processamento da imagem e aplicação da máscara e a versão final cortada
+- `colorDir_top.py` é a que roda para a mesma lógica de `colorseg.py`, mas para todas as imagens. Para fazer esse rodar corretamente, lembre-se de ajustar o path do diretório origem das imagens, a forma que eu fiz só pra simplificar foi usar o diretório de origem das imagens direto dentro de box crop, mas isso pode ser ajustado depois
+- `calibrator.py` foi a parte mais importante, a que fez as coisas realmente funcionarem. Ajustando o filtro os parametros é possível visualizar a máscara (seleção) tá ficando na imagem, o que permite chegar o mais próximo possível de selecionar apenas a caixa
