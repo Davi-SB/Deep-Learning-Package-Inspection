@@ -6,9 +6,6 @@ def crop_box_and_return_image(image_path):
     """
     Processa uma única imagem e retorna o objeto da imagem recortada, ou None se falhar.
     """
-    # ===================================================================
-    # --- PARÂMETROS FINAIS (Conforme definido anteriormente) ---
-    # ===================================================================
     
     MARGEM_X = 10  # Adiciona pixels na esquerda e na direita
     MARGEM_Y = 10  # Adiciona pixels em cima e embaixo
@@ -25,7 +22,7 @@ def crop_box_and_return_image(image_path):
     LOWER_CYAN = np.array([0, 75, 0])
     UPPER_CYAN = np.array([179, 95, 255])
     
-    # ATENÇÃO: V_min_W e V_max_W não estavam na imagem. Foram usados valores padrão.
+    # Foram usados valores padrão.
     LOWER_WHITE = np.array([0, 0, 160])
     UPPER_WHITE = np.array([179, 240, 255])
     # ===================================================================
@@ -72,24 +69,13 @@ def crop_box_and_return_image(image_path):
     # Retorna a imagem recortada
     return image[y_start:y_end, x_start:x_end]
 
-
-# =======================================================================
-# --- SCRIPT PRINCIPAL DE PROCESSAMENTO EM LOTE ---
-# =======================================================================
-
-# --- IMPORTANTE: EDITE ESTA LISTA COM SEUS DIRETÓRIOS ---
-# Use o formato de caminho do seu sistema operacional.
-# Exemplo para Windows: r"C:\Users\SeuUsuario\Desktop\Lote1"
-# Exemplo para Linux/Mac: "/home/seuusuario/documentos/lote1"
 lista_de_diretorios = [
     r"box crop top/damaged top",
     r"box crop top/intact top",
-    # Adicione quantos diretórios quiser
 ]
 
-print("--- Iniciando Processamento em Lote ---")
+print("--- Iniciando Processamento ---")
 
-# Loop através de cada diretório na lista
 for input_dir in lista_de_diretorios:
     if not os.path.isdir(input_dir):
         print(f"\n[ERRO] Diretório não encontrado, pulando: {input_dir}")
@@ -122,4 +108,4 @@ for input_dir in lista_de_diretorios:
             else:
                 print(f"    - Imagem '{filename}' pulada (não foi possível processar).")
 
-print("\n--- Processamento em Lote Concluído ---")
+print("\n--- Processamento Concluído ---")

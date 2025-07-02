@@ -5,7 +5,7 @@ def do_nothing(x):
     pass
 
 # --- Carregar Imagem ---
-image_path = 'box crop top/caixa.png'  # <-- COLOQUE O NOME DA SUA IMAGEM AQUI
+image_path = 'box crop top/caixa.png'
 image = cv2.imread(image_path)
 h, w = image.shape[:2]
 if h > 800:
@@ -98,7 +98,6 @@ while True:
 
 cv2.destroyAllWindows()
 
-# Ao sair, imprime os últimos valores para facilitar o 'copia e cola'
 print("\n--- Parâmetros Finais ---")
 print(f"BLUR_KERNEL = {blur_k}")
 print(f"CONTRASTE_ALPHA = {alpha}")
