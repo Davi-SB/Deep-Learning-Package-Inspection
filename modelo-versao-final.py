@@ -10,6 +10,8 @@ from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.optimizers import Adam
 import numpy as np
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
 
 # --- 1. CONFIGURAÇÕES GERAIS ---
 TRAIN_DIR = os.path.join("images", "removed_bg", "proporcional_resize")
@@ -33,12 +35,15 @@ class DualInputGenerator(tf.keras.utils.Sequence):
         self.preprocess_side = preprocess_side
         self.preprocess_top = preprocess_top
         self.class_indices = {'damaged': 0, 'intact': 1}
+        self.class_names = list(self.class_indices.keys())
         all_pairs, all_labels = self._scan_image_pairs()
         if not all_pairs:
             raise ValueError("Nenhum par de imagens foi encontrado. Verifique a estrutura de pastas.")
+        
         indices = np.arange(len(all_pairs))
         np.random.seed(seed)
         np.random.shuffle(indices)
+        
         if validation_split > 0 and subset:
             split_point = int(len(all_pairs) * (1 - validation_split))
             if subset == 'training':
@@ -80,16 +85,20 @@ class DualInputGenerator(tf.keras.utils.Sequence):
         end_idx = (index + 1) * self.batch_size
         batch_pairs = self.image_pairs[start_idx:end_idx]
         batch_labels = self.labels[start_idx:end_idx]
+        
         x_side_batch = np.zeros((len(batch_pairs), *self.target_size, 3), dtype='float32')
         x_top_batch = np.zeros((len(batch_pairs), *self.target_size, 3), dtype='float32')
         y_batch = np.array(batch_labels, dtype='uint8')
+        
         for i, (side_path, top_path) in enumerate(batch_pairs):
             img_side = load_img(side_path, target_size=self.target_size)
             x_side = img_to_array(img_side)
             x_side_batch[i] = self.preprocess_side(x_side)
+            
             img_top = load_img(top_path, target_size=self.target_size)
             x_top = img_to_array(img_top)
             x_top_batch[i] = self.preprocess_top(x_top)
+            
         return {'side_input': x_side_batch, 'top_input': x_top_batch}, y_batch
 
 # --- 3. CRIAÇÃO DOS GERADORES ---
@@ -113,18 +122,25 @@ validation_generator = DualInputGenerator(
 def create_dual_model(input_shape):
     base_side = VGG16(weights='imagenet', include_top=False, input_shape=input_shape)
     base_side.trainable = False
+    
     base_top = EfficientNetB0(weights='imagenet', include_top=False, input_shape=input_shape)
     base_top.trainable = False
+    
     input_side = Input(shape=input_shape, name='side_input')
     input_top = Input(shape=input_shape, name='top_input')
+    
     features_side = base_side(input_side)
     features_top = base_top(input_top)
+    
     flat_side = Flatten()(features_side)
     flat_top = Flatten()(features_top)
+    
     concatenated = Concatenate()([flat_side, flat_top])
+    
     x = Dense(512, activation='relu')(concatenated)
     x = Dropout(0.5)(x)
     output = Dense(1, activation='sigmoid')(x)
+    
     return Model(inputs=[input_side, input_top], outputs=output)
 
 # --- 5. COMPILAÇÃO E TREINAMENTO ---
@@ -132,7 +148,7 @@ dual_model = create_dual_model(INPUT_SHAPE)
 dual_model.compile(optimizer=Adam(learning_rate=LEARNING_RATE), loss='binary_crossentropy', metrics=['accuracy'])
 dual_model.summary()
 
-print("\nIniciando o treinamento do modelo de duas entradas...")
+print("\nIniciando o treinamento do modelo...")
 history = dual_model.fit(
     train_generator,
     validation_data=validation_generator,
@@ -143,67 +159,109 @@ history = dual_model.fit(
     ]
 )
 
-# --- 6. GRÁFICO DE DESEMPENHO ---
-plt.figure(figsize=(12, 5))
+# --- 6. MATRIZ DE CONFUSÃO (MÉTODO CORRIGIDO) ---
+print("\nGerando a Matriz de Confusão para o conjunto de validação...")
+
+# 1. Obter as previsões para TODO o conjunto de dados de uma só vez.
+# Passe o gerador inteiro para o método predict. É mais eficiente e evita erros.
+y_pred_probs = dual_model.predict(validation_generator, verbose=1)
+
+# 2. Obter os rótulos verdadeiros diretamente do gerador.
+# O atributo .labels que criamos na classe armazena todos os rótulos na ordem correta.
+y_true = validation_generator.labels
+
+# 3. Garanta que o número de predições e rótulos seja o mesmo.
+# A predição pode retornar menos itens se o tamanho do dataset não for divisível pelo batch_size.
+# Por isso, ajustamos y_true para ter o mesmo tamanho das predições.
+if len(y_pred_probs) != len(y_true):
+    print("Aviso: Ajustando o número de rótulos para corresponder às predições.")
+    y_true = y_true[:len(y_pred_probs)]
+
+# 4. Converter as probabilidades em classes (0 ou 1)
+y_pred_classes = (y_pred_probs.flatten() > 0.5).astype(int)
+
+# 5. Calcular a matriz de confusão
+cm = confusion_matrix(y_true, y_pred_classes)
+class_names = validation_generator.class_names
+
+# 6. Plotar a matriz de confusão de forma visual
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+            xticklabels=class_names, yticklabels=class_names)
+plt.title('Matriz de Confusão', fontsize=16)
+plt.ylabel('Classe Verdadeira', fontsize=12)
+plt.xlabel('Classe Prevista', fontsize=12)
+plt.show()
+
+
+# --- 7. GRÁFICOS DE DESEMPENHO DO TREINAMENTO ---
+print("\nGerando gráficos de desempenho do treinamento...")
+plt.figure(figsize=(14, 6))
+
+# Gráfico da Perda (Loss)
 plt.subplot(1, 2, 1)
-plt.plot(history.history['loss'], label='Treino')
-plt.plot(history.history['val_loss'], label='Validação')
-plt.title('Loss')
-plt.xlabel('Epochs')
-plt.ylabel('Loss')
+plt.plot(history.history['loss'], label='Perda de Treino')
+plt.plot(history.history['val_loss'], label='Perda de Validação')
+plt.title('Evolução da Perda (Loss)')
+plt.xlabel('Épocas')
+plt.ylabel('Perda')
 plt.legend()
 
+# Gráfico da Acurácia
 plt.subplot(1, 2, 2)
-plt.plot(history.history['accuracy'], label='Treino')
-plt.plot(history.history['val_accuracy'], label='Validação')
-plt.title('Acurácia')
-plt.xlabel('Epochs')
+plt.plot(history.history['accuracy'], label='Acurácia de Treino')
+plt.plot(history.history['val_accuracy'], label='Acurácia de Validação')
+plt.title('Evolução da Acurácia')
+plt.xlabel('Épocas')
 plt.ylabel('Acurácia')
 plt.legend()
+
 plt.tight_layout()
 plt.show()
 
-# --- 7. INTERPRETABILIDADE COM INTEGRATED GRADIENTS ---
+# --- 8. INTERPRETABILIDADE (FUNÇÃO CORRIGIDA) ---
 def integrated_gradients(input_data, model, input_name, baseline=None, steps=50):
-    input_tensor = tf.convert_to_tensor(input_data)
     if baseline is None:
         baseline = np.zeros_like(input_data).astype(np.float32)
-    interpolated_inputs = [
-        baseline + (float(i) / steps) * (input_data - baseline)
-        for i in range(steps + 1)
-    ]
-    interpolated_inputs = tf.convert_to_tensor(np.concatenate(interpolated_inputs, axis=0))
-    zero_tensor = tf.zeros_like(interpolated_inputs)
-    repeated_dict = {
-        'side_input': zero_tensor,
-        'top_input': zero_tensor
+
+    interpolated_path = [baseline + (float(i) / steps) * (input_data - baseline) for i in range(steps + 1)]
+    interpolated_inputs_np = np.concatenate(interpolated_path, axis=0)
+
+    other_input_name = 'top_input' if input_name == 'side_input' else 'side_input'
+    feed_dict_np = {
+        input_name: interpolated_inputs_np,
+        other_input_name: np.zeros_like(interpolated_inputs_np)
     }
-    repeated_dict[input_name] = interpolated_inputs
-    
+
+    feed_dict_tf = {key: tf.convert_to_tensor(val, dtype=tf.float32) for key, val in feed_dict_np.items()}
+
     with tf.GradientTape() as tape:
-        tape.watch(interpolated_inputs)
-        preds = model(repeated_dict)
+        tape.watch(feed_dict_tf[input_name])
+        preds = model(feed_dict_tf)
         outputs = preds[:, 0]
-    grads = tape.gradient(outputs, interpolated_inputs).numpy()
-    avg_grads = np.mean(grads.reshape((steps + 1, *input_data.shape)), axis=0)
+
+    grads = tape.gradient(outputs, feed_dict_tf[input_name])
+    avg_grads = np.mean(grads.numpy().reshape((steps + 1, *input_data.shape)), axis=0)
     integrated_grads = (input_data - baseline) * avg_grads
     return np.sum(integrated_grads, axis=-1)[0]
 
 def display_integrated_gradients(img_path, preprocess_fn, input_name, model):
     if not os.path.exists(img_path):
-        print(f"Imagem não encontrada: {img_path}")
+        print(f"Imagem de exemplo não encontrada: {img_path}")
         return
+        
+    print(f"\nGerando mapa de atribuição para: {os.path.basename(img_path)}")
     img = load_img(img_path, target_size=INPUT_SHAPE[:2])
     arr = img_to_array(img)
     input_arr = preprocess_fn(arr)
     input_arr = np.expand_dims(input_arr, axis=0)
-    data = {
-        'side_input': np.zeros((1, *INPUT_SHAPE), dtype=np.float32),
-        'top_input': np.zeros((1, *INPUT_SHAPE), dtype=np.float32)
-    }
-    data[input_name] = input_arr.astype(np.float32)
+    
     attribution = integrated_gradients(input_arr, model, input_name=input_name)
+    
+    # Normaliza a atribuição para uma melhor visualização
     attribution = (attribution - np.min(attribution)) / (np.max(attribution) - np.min(attribution) + 1e-8)
+    
+    plt.figure(figsize=(6, 6))
     plt.imshow(img)
     plt.imshow(attribution, cmap='hot', alpha=0.5)
     plt.title(f'Integrated Gradients: {input_name}')
@@ -211,17 +269,18 @@ def display_integrated_gradients(img_path, preprocess_fn, input_name, model):
     plt.show()
 
 def run_integrated_gradients_example():
+    print("\n--- Iniciando Análise de Interpretabilidade ---")
     side_img_path = os.path.join(TRAIN_DIR, "side", "damaged", "0185507921789_side.png")
     top_img_path = os.path.join(TRAIN_DIR, "top", "damaged", "0185507921789_top.png")
+    
     if not os.path.exists(side_img_path) or not os.path.exists(top_img_path):
-        print("Imagens de exemplo para interpretabilidade não encontradas.")
-        print(f"Arquivos disponíveis em side/damaged: {os.listdir(os.path.join(TRAIN_DIR, 'side', 'damaged'))}")
-        print(f"Arquivos disponíveis em top/damaged: {os.listdir(os.path.join(TRAIN_DIR, 'top', 'damaged'))}")
+        print("AVISO: Imagens de exemplo para interpretabilidade não encontradas. Pulando esta etapa.")
         return
-    print("\nInterpretabilidade para imagem lateral (side_input):")
+        
     display_integrated_gradients(side_img_path, vgg16_preprocess, 'side_input', dual_model)
-    print("\nInterpretabilidade para imagem superior (top_input):")
     display_integrated_gradients(top_img_path, effnet_preprocess, 'top_input', dual_model)
 
-# === CHAMADA AUTOMÁTICA APÓS O TREINAMENTO ===
+# --- CHAMADA FINAL ---
 run_integrated_gradients_example()
+
+print("\nAnálise completa.")
