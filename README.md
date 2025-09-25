@@ -30,3 +30,7 @@ Considerar um modelo para side e um para top
 - Pillow e OpenCV
 - Tensorflow
 - iNNvestigate
+
+## Resultado
+
+Nossa apresentação final está no arquivo Projeto - Embalagens Danificadas.pdf, no diretório raiz
